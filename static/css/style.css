@@ -236,6 +236,9 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .notice { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.75rem 0.9rem; border-radius: var(--radius-sm); margin-top: 0.5rem; font-size: 0.95rem; }
 .notice .icon { margin-top: 0.12em; }
 .notice-unsure { background: var(--warn-bg); color: var(--warn-ink); }
+.notice-comparison { display: block; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--line-soft); }
+.comparison-scores { margin-top: 0.15rem; font-weight: 600; }
+.comparison-guidance { margin-top: 0.25rem; color: var(--ink-2); }
 .notice-pending { background: var(--accent-soft); color: var(--ink); padding: 1rem 1.1rem; }
 .notice-pending .icon { color: var(--accent-strong); }
 .notice-pending p + p { margin-top: 0.5rem; }

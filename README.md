@@ -14,6 +14,7 @@ A web app that looks at a photo and says which of six scene types it shows (**bu
 
 - **Upload, drag and drop, or paste** a photo (JPG, PNG, WEBP, BMP or GIF, up to 10 MB), with a preview.
 - **Results without reloading the page**: the predicted scene, the confidence, and a bar for **all six scenes** with the top 3 ranked.
+- **Close-call guidance** for glacier/mountain and buildings/street when the top two scores differ by no more than 15 percentage points.
 - **Honest uncertainty**: a "Not sure" warning when no scene reaches 50%.
 - **11 sample photos** you can click to test the model, captioned with what each photo really shows.
 - **Recent results**, saved only in your browser.

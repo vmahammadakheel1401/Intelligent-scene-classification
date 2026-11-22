@@ -31,6 +31,10 @@
     var confidence = document.getElementById('confidence');
     var verdictDesc = document.getElementById('verdict-desc');
     var unsure = document.getElementById('notice-unsure');
+    var comparisonNote = document.getElementById('notice-comparison');
+    var comparisonTitle = document.getElementById('comparison-title');
+    var comparisonScores = document.getElementById('comparison-scores');
+    var comparisonGuidance = document.getElementById('comparison-guidance');
     var announce = document.getElementById('result-announce');
     var rows = Array.prototype.slice.call(document.querySelectorAll('#spectrum .scene'));
     var historySection = document.getElementById('history');
@@ -76,6 +80,7 @@
         confidence.textContent = currentFile ? 'Press "Classify photo" to see what the model thinks.' : 'Pick a photo, or try a sample below.';
         verdictDesc.textContent = '';
         unsure.hidden = true;
+        comparisonNote.hidden = true;
         rows.forEach(function (row) {
             row.classList.remove('is-top');
             row.style.setProperty('--p', 0);
@@ -151,6 +156,15 @@
         confidence.appendChild(document.createTextNode(' confident'));
         verdictDesc.textContent = data.description || '';
         unsure.hidden = !(data.confidence < LOW);
+        var comparison = data.comparison;
+        comparisonNote.hidden = !comparison;
+        if (comparison) {
+            comparisonTitle.textContent = 'Close call: ' + capitalize(comparison.first_label) + ' or ' + capitalize(comparison.second_label) + '?';
+            comparisonScores.textContent =
+                capitalize(comparison.first_label) + ' ' + (comparison.first_probability * 100).toFixed(1) + '% · ' +
+                capitalize(comparison.second_label) + ' ' + (comparison.second_probability * 100).toFixed(1) + '%';
+            comparisonGuidance.textContent = comparison.guidance;
+        }
 
         var probs = {};
         (data.probabilities || data.top3).forEach(function (p) { probs[p.label] = p.probability; });
@@ -172,6 +186,7 @@
         var second = data.top3[1];
         announce.textContent = 'Result: ' + capitalize(data.label) + ', ' + pct + ' percent confident.' +
             (second ? ' Second choice: ' + second.label + ', ' + Math.round(second.probability * 100) + ' percent.' : '') +
+            (comparison ? ' Close call between ' + comparison.first_label + ' and ' + comparison.second_label + '. ' + comparison.guidance : '') +
             (data.confidence < LOW ? ' The model is not sure about this photo.' : '');
     }
 

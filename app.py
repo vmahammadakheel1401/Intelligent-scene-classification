@@ -35,6 +35,13 @@ CLASS_INFO = {
     "sea": "Open water, beaches, coastlines and waves.",
     "street": "Roads and lanes seen from street level, with buildings alongside.",
 }
+COMPARISON_GAP = 0.15
+SIMILAR_CLASS_GUIDANCE = {
+    frozenset(("glacier", "mountain")):
+        "Look for broad ice fields or icebergs (glacier) versus rocky peaks or ridges (mountain).",
+    frozenset(("buildings", "street")):
+        "Look for structures dominating the frame (buildings) versus a road or street scene (street).",
+}
 CLASS_THUMBS = {  # one bundled sample photo that represents each class
     "buildings": "test_image_4.jpg", "forest": "test_image_12.jpg", "glacier": "test_image_10.jpg",
     "mountain": "test_image_3.jpg", "sea": "test_image_8.jpg", "street": "test_image_5.jpg",
@@ -50,6 +57,22 @@ SAMPLE_LABELS = {  # what each bundled sample image shows (checked by eye)
 
 class UserError(Exception):
     """A problem with the upload that the user can fix (shown as a friendly message)."""
+
+
+def compare_top_classes(top3):
+    if len(top3) < 2:
+        return None
+    first, second = top3[:2]
+    guidance = SIMILAR_CLASS_GUIDANCE.get(frozenset((first["label"], second["label"])))
+    if guidance is None or first["probability"] - second["probability"] > COMPARISON_GAP:
+        return None
+    return {
+        "first_label": first["label"],
+        "first_probability": first["probability"],
+        "second_label": second["label"],
+        "second_probability": second["probability"],
+        "guidance": guidance,
+    }
 
 
 def load_meta():
@@ -147,6 +170,7 @@ def classify(file_storage):
         "low_confidence": best["probability"] < LOW_CONFIDENCE,
         "description": CLASS_INFO.get(best["label"], ""),
         "top3": top3,
+        "comparison": compare_top_classes(top3),
         "probabilities": [{"label": c, "probability": round(float(p), 4)} for c, p in zip(CLASSES, probs)],
         "filename": file_storage.filename,
     }

@@ -58,6 +58,14 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19Z"/><path d="M12 10v4.5M12 17.5v.01"/></svg>
                 <span><strong>Not sure.</strong> No scene reached {{ (low_confidence * 100)|int }}%, so this photo may mix several scenes or not be one of the six.</span>
             </p>
+            <aside class="notice notice-comparison" id="notice-comparison" role="note"
+                   {% if not (result and result.comparison) %}hidden{% endif %}>
+                <strong id="comparison-title">{% if result and result.comparison %}Close call: {{ result.comparison.first_label|capitalize }} or {{ result.comparison.second_label|capitalize }}?{% endif %}</strong>
+                <p class="comparison-scores" id="comparison-scores">
+                    {% if result and result.comparison %}{{ result.comparison.first_label|capitalize }} {{ '%.1f'|format(result.comparison.first_probability * 100) }}% · {{ result.comparison.second_label|capitalize }} {{ '%.1f'|format(result.comparison.second_probability * 100) }}%{% endif %}
+                </p>
+                <p class="comparison-guidance" id="comparison-guidance">{% if result and result.comparison %}{{ result.comparison.guidance }}{% endif %}</p>
+            </aside>
         </div>
 
         <h3 class="spectrum-title">All six scenes</h3>
