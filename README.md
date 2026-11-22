@@ -15,7 +15,7 @@ A web app that looks at a photo and says which of six scene types it shows (**bu
 - **Upload, drag and drop, or paste** a photo (JPG, PNG, WEBP, BMP or GIF, up to 10 MB), with a preview.
 - **Results without reloading the page**: the predicted scene, the confidence, and a bar for **all six scenes** with the top 3 ranked.
 - **Honest uncertainty**: a "Not sure" warning when no scene reaches 50%.
-- **12 sample photos** you can click to test the model, captioned with what each photo really shows.
+- **11 sample photos** you can click to test the model, captioned with what each photo really shows.
 - **Recent results**, saved only in your browser.
 - **Light and dark mode**: follows your system setting, with a toggle.
 - **About the model** page: how it works, test accuracy, per-scene scores and the confusion matrix (filled in automatically after retraining), training setup, limitations and credits.
@@ -37,7 +37,7 @@ static/
   js/app.js                     Upload, preview, validation, results, samples, history
   js/theme.js                   Light/dark toggle
   thumbs/                       Small versions of the sample photos
-  test_image_*.jpg              12 sample photos
+  test_image_*.jpg              sample photos (11 shown in the app)
   favicon.svg
 natural_scenes_image_resnet_classifier.pt   Model weights used by the app
 model_meta.json                 Written by the v2 notebook: input size, classes, test results (after retraining)
@@ -161,6 +161,15 @@ curl -F "image=@static/test_image_3.jpg" http://127.0.0.1:8000/api/predict
 ```
 
 (Example values.) Errors return `{"ok": false, "error": "..."}` with status 400 (bad file), 413 (over 10 MB) or 503 (model not loaded).
+
+## Sample photos
+
+All 12 photos in `static/` come from the original repository, which does not say where they were taken from. `test_image_7.jpeg` carries a tiled **"Unsplash+"** watermark (a paid stock licence), so the app no longer shows it in the sample gallery. Replace it with a freely licensed beach or sea photo (for example from Pexels or the free Unsplash licence) and record the source here.
+
+| File | Shows | Source |
+|---|---|---|
+| test_image_1 … test_image_12 | see captions in the app | original repository, source not recorded |
+| static/thumbs/* | small copies of the above | generated from the originals by Team B2 |
 
 ## Known limitations
 

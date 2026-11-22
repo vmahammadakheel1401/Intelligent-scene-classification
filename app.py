@@ -37,12 +37,13 @@ CLASS_INFO = {
 }
 CLASS_THUMBS = {  # one bundled sample photo that represents each class
     "buildings": "test_image_4.jpg", "forest": "test_image_12.jpg", "glacier": "test_image_10.jpg",
-    "mountain": "test_image_3.jpg", "sea": "test_image_7.jpg", "street": "test_image_5.jpg",
+    "mountain": "test_image_3.jpg", "sea": "test_image_8.jpg", "street": "test_image_5.jpg",
 }
 SAMPLE_LABELS = {  # what each bundled sample image shows (checked by eye)
     "test_image_1.jpg": "glacier", "test_image_2.jpg": "forest", "test_image_3.jpg": "mountain",
     "test_image_4.jpg": "buildings", "test_image_5.jpg": "street", "test_image_6.jpg": "buildings",
-    "test_image_7.jpeg": "sea", "test_image_8.jpg": "sea", "test_image_9.jpg": "glacier",
+    # test_image_7.jpeg is left out: it carries an "Unsplash+" (paid licence) watermark.
+    "test_image_8.jpg": "sea", "test_image_9.jpg": "glacier",
     "test_image_10.jpg": "glacier", "test_image_11.jpg": "mountain", "test_image_12.jpeg": "forest",
 }
 

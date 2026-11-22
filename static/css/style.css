@@ -129,8 +129,10 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .brand { display: flex; align-items: center; gap: 0.6rem; color: inherit; text-decoration: none; font-weight: 600; letter-spacing: -0.01em; margin-right: auto; }
 .brand-mark { width: 1.9rem; height: 1.9rem; color: #8fd8b8; }
 .brand-text { font-size: 1.02rem; }
+.brand-short { display: none; }
 .nav { display: flex; gap: 0.25rem; }
 .nav a {
+    display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem;
     color: var(--shell-ink-2); text-decoration: none; font-size: 0.95rem; font-weight: 500;
     padding: 0.55rem 0.8rem; border-radius: 999px; transition: background-color 0.15s, color 0.15s;
 }
@@ -178,6 +180,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .dropzone.has-image { border-style: solid; border-color: var(--line); }
 .dropzone.has-image:hover { background: var(--photo-ground); }
 .dropzone-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.dropzone.has-image { aspect-ratio: var(--img-ratio, 4 / 3); }
 .dropzone-empty { display: grid; justify-items: center; gap: 0.5rem; padding: 1.5rem; text-align: center; color: var(--ink-2); }
 .dropzone-empty .icon-lg { color: var(--accent); }
 .dropzone-title { font-size: 1.1rem; font-weight: 600; color: var(--ink); }
@@ -210,7 +213,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
 .btn-quiet { background: transparent; color: var(--ink); border-color: var(--line); }
 .btn-quiet:hover:not(:disabled) { border-color: var(--ink-2); }
-.btn-small { min-height: 2.25rem; padding: 0.3rem 0.9rem; font-size: 0.9rem; }
+.btn-small { min-height: 2.75rem; padding: 0.3rem 0.9rem; font-size: 0.9rem; }
 .btn .spinner { display: none; }
 .is-busy .btn-primary .spinner { display: inline-block; }
 
@@ -261,6 +264,24 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .scene.is-top .bar { background: var(--panel); }
 .scene.is-top .scene-rank { background: var(--accent); color: var(--accent-ink); }
 [data-state="done"] .scene:not(.is-top) .scene-thumb { filter: saturate(0.55); }
+.verdict { margin: 0; }
+.scene-guide { margin-top: 1rem; border-top: 1px solid var(--line-soft); padding-top: 0.85rem; }
+.scene-guide summary { cursor: pointer; font-weight: 600; color: var(--accent-strong); min-height: 2.75rem; display: flex; align-items: center; gap: 0.5rem; list-style: none; }
+.scene-guide summary::-webkit-details-marker { display: none; }
+.scene-guide summary::before {
+    content: ""; width: 0.5rem; height: 0.5rem; flex: none; margin-left: 0.15rem;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg); transition: transform 0.2s var(--ease-out);
+}
+.scene-guide[open] summary::before { transform: rotate(45deg); }
+.scene-guide dl { margin: 0.25rem 0 0; display: grid; gap: 0.5rem; }
+.scene-guide dt { font-weight: 600; }
+.scene-guide dd { margin: 0; color: var(--ink-2); font-size: 0.92rem; }
+[data-state="idle"] .scene-guide { display: none; }   /* idle rows already show each description */
+@media (min-width: 861px) {
+    .scene { grid-template-columns: 72px minmax(0, 1fr); }
+    .scene-thumb { width: 72px; height: 54px; }
+}
 
 .is-busy.result .verdict-block { opacity: 0.45; }
 .result .verdict-block { transition: opacity 0.2s; }
@@ -337,6 +358,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 }
 @media (max-width: 560px) {
     .brand-text { font-size: 0.95rem; }
+    .brand-long { display: none; }
+    .brand-short { display: inline; }
     .shell-inner { gap: 0.6rem 0.75rem; }
     .nav { order: 3; width: 100%; }
     .nav a { flex: 1; text-align: center; }
@@ -344,7 +367,6 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     .actions .btn { flex: 1 1 100%; }
     .sample-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .spec-list div { grid-template-columns: minmax(0, 1fr); gap: 0.2rem; }
-    .scene-info { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

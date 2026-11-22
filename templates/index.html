@@ -45,11 +45,11 @@
         </div>
     </form>
 
-    <section class="panel result" id="result" data-state="{{ 'done' if result else 'idle' }}" aria-labelledby="result-title">
-        <h2 class="panel-title" id="result-title">Result</h2>
+    <section class="panel result" id="result" data-state="{{ 'done' if result else 'idle' }}" aria-labelledby="result-title verdict">
+        <h2 class="visually-hidden" id="result-title">Result</h2>
 
         <div class="verdict-block">
-            <p class="verdict" id="verdict">{{ result.label|capitalize if result else 'Waiting for a photo' }}</p>
+            <h3 class="verdict" id="verdict">{{ result.label|capitalize if result else 'Waiting for a photo' }}</h3>
             <p class="confidence" id="confidence">
                 {% if result %}<span class="num">{{ (result.confidence * 100)|round|int }}%</span> confident{% else %}Pick a photo, or try a sample below.{% endif %}
             </p>
@@ -82,6 +82,12 @@
             </li>
             {% endfor %}
         </ol>
+        <details class="scene-guide">
+            <summary>About the six scenes</summary>
+            <dl>
+                {% for c in classes %}<div><dt>{{ c.name|capitalize }}</dt><dd>{{ c.info }}</dd></div>{% endfor %}
+            </dl>
+        </details>
         <p class="visually-hidden" id="result-announce" aria-live="polite"></p>
     </section>
 </div>

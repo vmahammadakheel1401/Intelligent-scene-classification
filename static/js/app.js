@@ -96,6 +96,11 @@
         currentFile = file;
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         previewUrl = URL.createObjectURL(file);
+        preview.onload = function () {
+            // Let the frame take the photo's own shape (within limits) so the photo fills it.
+            var r = preview.naturalWidth / preview.naturalHeight;
+            if (r) dropzone.style.setProperty('--img-ratio', Math.min(1.9, Math.max(0.75, r)).toFixed(3));
+        };
         preview.src = previewUrl;
         preview.alt = 'Preview of ' + file.name;
         preview.hidden = false;
@@ -115,6 +120,7 @@
         preview.hidden = true;
         emptyState.hidden = false;
         dropzone.classList.remove('has-image');
+        dropzone.style.removeProperty('--img-ratio');
         input.value = '';
         fileMeta.textContent = 'No photo chosen yet.';
         resetBtn.hidden = true;
