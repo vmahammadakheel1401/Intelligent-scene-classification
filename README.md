@@ -6,7 +6,7 @@ A web app that looks at a photo and says which of six scene types it shows (**bu
 
 ![Classify page: photo on the left, result with all six scenes on the right](docs/screenshot.jpg)
 
-> **Model status:** the `.pt` file in this repo must be retrained before the predictions mean anything. The original trained model was never published (see [Project history](#project-history-and-credits)). Run `train_resnet50_v2.ipynb` on Kaggle ([steps below](#retrain-the-model-on-kaggle)). The app shows a "Not sure" warning and the About page says "Results pending" until then.
+> **Model status:** the model in this repo was retrained by Team B2 on 22 November 2026 and scores **93.1% on the 3,000 test photos**. The original repo shipped an untrained model (see [Project history](#project-history-and-credits)). The ResNet50 backbone is frozen and only the classifier head was trained, which works on an ordinary laptop CPU ([steps below](#retrain-on-your-own-computer-cpu-no-gpu-needed)). For a few more percent, also fine-tune the last ResNet block with `train_resnet50_v2.ipynb` on Kaggle's free GPU ([steps](#retrain-the-model-on-kaggle)).
 
 ---
 
@@ -40,8 +40,11 @@ static/
   test_image_*.jpg              sample photos (11 shown in the app)
   favicon.svg
 natural_scenes_image_resnet_classifier.pt   Model weights used by the app
-model_meta.json                 Written by the v2 notebook: input size, classes, test results (after retraining)
-train_resnet50_v2.ipynb         Fixed training notebook (run this on Kaggle)
+model_meta.json                 Input size, classes and test results of the current model (read by the app)
+training/
+  extract_features.py           CPU training step 1: ResNet50 features for every photo
+  train_head.py                 CPU training step 2: train the head, test it, save the model
+train_resnet50_v2.ipynb         GPU training notebook that also fine-tunes layer4 (run on Kaggle)
 natural-scenes-image-classification-using-cnns.ipynb   Original notebook (kept for reference)
 requirements.txt                Python packages (pinned versions)
 Dockerfile, .dockerignore       Container setup (CPU-only)
@@ -104,9 +107,29 @@ docker run -p 8000:8000 scene-classifier
 
 Then open http://localhost:8000. The image uses CPU-only PyTorch and runs gunicorn with 2 workers.
 
+## Retrain on your own computer (CPU, no GPU needed)
+
+This is how the model in this repo was made. It takes about 45 minutes on a laptop CPU, almost all of it in step 2.
+
+1. Install the extra package: `pip install pyarrow`
+2. Download the dataset (about 258 MB) from the public Hugging Face mirror [sfarrukhm/intel-image-classification](https://huggingface.co/datasets/sfarrukhm/intel-image-classification), which has the same 14,034 training and 3,000 test photos as the Kaggle original:
+
+   ```powershell
+   mkdir data/hf
+   curl.exe -L -o data/hf/train.parquet "https://huggingface.co/datasets/sfarrukhm/intel-image-classification/resolve/refs%2Fconvert%2Fparquet/default/train/0000.parquet"
+   curl.exe -L -o data/hf/test.parquet "https://huggingface.co/datasets/sfarrukhm/intel-image-classification/resolve/refs%2Fconvert%2Fparquet/default/test/0000.parquet"
+   ```
+
+   (`data/` is in `.gitignore`, so the dataset is never committed.)
+3. Turn every photo into ResNet50 features (the slow part, done once): `python training/extract_features.py data/hf V2`
+4. Train the head, test it and save the model (takes about a minute): `python training/train_head.py data/hf/features_V2.pt . --save`
+5. Restart the app. The About page now shows the new results from `model_meta.json`.
+
+How it works: the ResNet50 backbone (ImageNet weights) is frozen, so each photo only has to go through it once. Its 2,048 features, for the photo and its mirror image, are saved, and the small head is trained on them for 40 epochs. 10% of the training photos are held back to pick the best epoch, and the 3,000 test photos are used only once, for the final score.
+
 ## Retrain the model on Kaggle
 
-Takes about 30–45 minutes on Kaggle's free GPU.
+Fine-tunes the last ResNet block as well, which should add a few percent. Takes about 30–45 minutes on Kaggle's free GPU.
 
 1. On Kaggle: **Create → New Notebook → File → Import Notebook**, and choose `train_resnet50_v2.ipynb`.
 2. Right panel: **Add Input**, search **intel-image-classification** (by *puneet6060*), and add it.
@@ -135,9 +158,10 @@ What the v2 notebook fixes compared with the original:
 |---|---|---|
 | Original custom CNN (original notebook) | 80.7% | Reported in the original notebook |
 | Original ResNet50 (original notebook) | 86.1% | Reported, but the trained file was never published |
-| ResNet50 v2 (this repo) | *pending: fill in after retraining* | Expected around 91–93% |
+| ResNet50 v2, head trained on CPU (this repo) | **93.1%** | Frozen backbone, 224 px, 22 November 2026 |
+| ResNet50 v2 with layer4 fine-tuned (Kaggle notebook) | not run yet | Expected around 92–94% |
 
-After retraining, the exact numbers, per-scene precision/recall and the confusion matrix appear on the app's **About the model** page.
+Per-scene precision/recall and the confusion matrix are on the app's **About the model** page.
 
 ## API
 
@@ -183,7 +207,7 @@ This project builds on **[sayamalt/natural-scenes-image-classification-using-cnn
 
 What Team B2 added or changed:
 
-- Found that the model file in the repo was untrained (classifier head at random initialisation, ~17% per class), and wrote `train_resnet50_v2.ipynb` with the training bugs fixed.
+- Found that the model file in the repo was untrained (classifier head at random initialisation, ~17% per class), retrained it (93.1% test accuracy) with the scripts in `training/`, and wrote `train_resnet50_v2.ipynb` with the original notebook's training bugs fixed.
 - Rewrote the backend: input validation, friendly errors instead of crashes, top-3 and all-class probabilities, a JSON API, a 10 MB upload limit, debug mode off by default, a safe weights-only model loader.
 - Rebuilt the whole interface: preview, drag and drop, samples, confidence bars, uncertainty warning, history, dark mode, mobile layout, accessibility, About page.
 - Cleaned the repo (removed broken Git LFS pointer files, pinned versions, smaller CPU Docker image) and wrote this README.

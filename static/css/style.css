@@ -330,6 +330,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .facts div { background: var(--panel); padding: 0.9rem 1rem; }
 .facts dt { font-size: 0.88rem; color: var(--ink-2); }
 .facts dd { margin: 0.2rem 0 0; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }
+.facts-note { font-size: 0.88rem; font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
 .spec-list { margin: 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
 .spec-list div { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 1rem; padding: 0.7rem 0; border-bottom: 1px solid var(--line); }
 .spec-list dt { font-weight: 600; }

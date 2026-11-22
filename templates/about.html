@@ -24,7 +24,7 @@
         <dl class="facts">
             <div><dt>Test accuracy</dt><dd class="num">{{ '%.1f'|format(meta.test_accuracy * 100) }}%</dd></div>
             {% if meta.best_val_accuracy is defined %}<div><dt>Best validation accuracy</dt><dd class="num">{{ '%.1f'|format(meta.best_val_accuracy * 100) }}%</dd></div>{% endif %}
-            {% if meta.epochs_trained is defined %}<div><dt>Epochs trained</dt><dd class="num">{{ meta.epochs_trained }}</dd></div>{% endif %}
+            {% if meta.epochs_trained is defined %}<div><dt>Epochs trained</dt><dd class="num">{{ meta.epochs_trained }}{% if meta.best_epoch is defined %} <span class="facts-note">(best: {{ meta.best_epoch }})</span>{% endif %}</dd></div>{% endif %}
             <div><dt>Input size</dt><dd class="num">{{ meta.img_size }} px</dd></div>
         </dl>
 
@@ -81,7 +81,7 @@
     <section class="about-section" aria-labelledby="train-title">
         <h2 id="train-title">Training setup</h2>
         <dl class="spec-list">
-            <div><dt>Dataset</dt><dd>Intel Image Classification: about 14,000 training and 3,000 test photos, 150 × 150 px, six classes</dd></div>
+            <div><dt>Dataset</dt><dd>Intel Image Classification: about 14,000 training and 3,000 test photos, 150 × 150 px, six classes{% if meta.train_images is defined %}. {{ meta.train_images }} photos used for training and {{ meta.val_images }} held back to pick the best epoch{% endif %}</dd></div>
             <div><dt>Backbone</dt><dd>ResNet50 pre-trained on ImageNet{% if meta.trainable is defined %}; {{ meta.trainable }}{% endif %}</dd></div>
             <div><dt>Augmentation</dt><dd>{{ meta.augmentation|default('Random rotation, horizontal and vertical flips, sharpness, autocontrast and colour jitter (original notebook)') }}</dd></div>
             <div><dt>Optimiser</dt><dd>{{ meta.optimizer|default('Adam, learning rate 0.00001 (original notebook)') }}</dd></div>
@@ -99,7 +99,7 @@
 
     <section class="about-section" aria-labelledby="credits-title">
         <h2 id="credits-title">Credits</h2>
-        <p>The original notebook, model design and Flask app come from <a href="https://github.com/sayamalt/natural-scenes-image-classification-using-cnns">sayamalt/natural-scenes-image-classification-using-cnns</a>. Team B2 rebuilt the training pipeline (<code>train_resnet50_v2.ipynb</code>), hardened the backend and rebuilt the interface; the retrained model is pending.</p>
+        <p>The original notebook, model design and Flask app come from <a href="https://github.com/sayamalt/natural-scenes-image-classification-using-cnns">sayamalt/natural-scenes-image-classification-using-cnns</a>. Team B2 rebuilt the training pipeline (<code>train_resnet50_v2.ipynb</code>), hardened the backend and rebuilt the interface{% if meta.test_accuracy is defined %}, and retrained the model ({{ meta.version }}){% else %}; the retrained model is pending{% endif %}.</p>
         <p>Team B2, Dept. of AIML, Dayananda Sagar College of Engineering: [Team member names to be added]</p>
     </section>
 </article>
