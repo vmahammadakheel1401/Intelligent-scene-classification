@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · AI Approach for Intelligent Scene Image Classification{% endblock %}
+
+{% block content %}
+<div class="intro error-page">
+    <p class="error-code num">{{ code }}</p>
+    <h1>{{ message }}</h1>
+    <p><a class="btn btn-primary" href="{{ url_for('home') }}">Back to the classifier</a></p>
+</div>
+{% endblock %}

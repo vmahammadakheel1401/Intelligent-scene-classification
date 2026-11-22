@@ -20,3 +20,8 @@ data/
 seg_train/
 seg_test/
 seg_pred/
+
+# Local design-tool notes (not part of the app)
+PRODUCT.md
+DESIGN.md
+.impeccable/

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}About the model · AI Approach for Intelligent Scene Image Classification{% endblock %}
+
+{% block content %}
+<article class="about">
+    <header class="intro">
+        <h1>AI Approach for Intelligent Scene Image Classification</h1>
+        <p>How the model works, how well it does, and where the work came from.</p>
+    </header>
+
+    <section class="about-section" aria-labelledby="how-title">
+        <h2 id="how-title">How it works</h2>
+        <ol class="steps">
+            <li><strong>Prepare the photo.</strong> It is resized to {{ meta.img_size }} × {{ meta.img_size }} pixels and its colours are normalised the same way as during training.</li>
+            <li><strong>Look at it.</strong> A ResNet50 network, first trained on 1.2 million ImageNet photos, turns the image into 2,048 numbers that describe what it sees.</li>
+            <li><strong>Decide.</strong> A small classifier head (2048 → 512 → 128 → 6) turns those numbers into a probability for each of the six scenes. The highest one is the answer.</li>
+        </ol>
+    </section>
+
+    <section class="about-section" aria-labelledby="results-title">
+        <h2 id="results-title">Results</h2>
+        {% if meta.test_accuracy is defined %}
+        <p class="lede">Model {{ meta.version }}{% if meta.trained_at %}, trained {{ meta.trained_at }}{% endif %}. Tested on {{ meta.test_images|default(3000) }} photos the model never saw during training.</p>
+        <dl class="facts">
+            <div><dt>Test accuracy</dt><dd class="num">{{ '%.1f'|format(meta.test_accuracy * 100) }}%</dd></div>
+            {% if meta.best_val_accuracy is defined %}<div><dt>Best validation accuracy</dt><dd class="num">{{ '%.1f'|format(meta.best_val_accuracy * 100) }}%</dd></div>{% endif %}
+            {% if meta.epochs_trained is defined %}<div><dt>Epochs trained</dt><dd class="num">{{ meta.epochs_trained }}</dd></div>{% endif %}
+            <div><dt>Input size</dt><dd class="num">{{ meta.img_size }} px</dd></div>
+        </dl>
+
+        {% if meta.per_class is defined %}
+        <h3>Per scene</h3>
+        <div class="table-wrap">
+            <table class="data-table">
+                <caption class="visually-hidden">Precision, recall and F1 score for each scene type</caption>
+                <thead><tr><th scope="col">Scene</th><th scope="col">Precision</th><th scope="col">Recall</th><th scope="col">F1</th><th scope="col">Test photos</th></tr></thead>
+                <tbody>
+                {% for c in meta.classes %}{% set r = meta.per_class[c] %}
+                    <tr><th scope="row">{{ c|capitalize }}</th>
+                        <td class="num">{{ '%.2f'|format(r.precision) }}</td><td class="num">{{ '%.2f'|format(r.recall) }}</td>
+                        <td class="num">{{ '%.2f'|format(r.f1) }}</td><td class="num">{{ r.support }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="table-note">Precision: when the model says "glacier", how often it is right. Recall: of all real glaciers, how many it found.</p>
+        {% endif %}
+
+        {% if meta.confusion_matrix is defined %}
+        <h3>Confusion matrix</h3>
+        <p class="table-note">Rows are the real scene, columns are what the model answered. The diagonal is correct; anything else is a mix-up.</p>
+        <div class="table-wrap">
+            {% set ns = namespace(maxv=1) %}
+            {% for row in meta.confusion_matrix %}{% for v in row %}{% if v > ns.maxv %}{% set ns.maxv = v %}{% endif %}{% endfor %}{% endfor %}
+            <table class="data-table confusion">
+                <caption class="visually-hidden">Confusion matrix: real scene by row, predicted scene by column</caption>
+                <thead><tr><th scope="col"><span class="visually-hidden">Real scene</span></th>
+                    {% for c in meta.classes %}<th scope="col">{{ c|capitalize }}</th>{% endfor %}</tr></thead>
+                <tbody>
+                {% for row in meta.confusion_matrix %}{% set i = loop.index0 %}
+                    <tr><th scope="row">{{ meta.classes[i]|capitalize }}</th>
+                    {% for v in row %}
+                        <td class="num{% if loop.index0 == i %} is-diag{% endif %}" style="--v: {{ (v / ns.maxv)|round(3) }}">{{ v }}</td>
+                    {% endfor %}</tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="notice notice-pending">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <div>
+                <p><strong>Results pending.</strong> The model file in this copy of the app has not been retrained yet, so its answers are close to random.</p>
+                <p>The original notebook reported <span class="num">86.1%</span> test accuracy, but that trained file was never published. Run <code>train_resnet50_v2.ipynb</code> on Kaggle to produce a new model; this section then fills in automatically from <code>model_meta.json</code>.</p>
+            </div>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="about-section" aria-labelledby="train-title">
+        <h2 id="train-title">Training setup</h2>
+        <dl class="spec-list">
+            <div><dt>Dataset</dt><dd>Intel Image Classification: about 14,000 training and 3,000 test photos, 150 × 150 px, six classes</dd></div>
+            <div><dt>Backbone</dt><dd>ResNet50 pre-trained on ImageNet{% if meta.trainable is defined %}; {{ meta.trainable }}{% endif %}</dd></div>
+            <div><dt>Augmentation</dt><dd>{{ meta.augmentation|default('Random rotation, horizontal and vertical flips, sharpness, autocontrast and colour jitter (original notebook)') }}</dd></div>
+            <div><dt>Optimiser</dt><dd>{{ meta.optimizer|default('Adam, learning rate 0.00001 (original notebook)') }}</dd></div>
+        </dl>
+    </section>
+
+    <section class="about-section" aria-labelledby="limits-title">
+        <h2 id="limits-title">Limitations</h2>
+        <ul class="plain-list">
+            <li>It only knows six scenes. A photo of a desert, a room or a person still gets one of the six answers, which is why the page warns when confidence is low.</li>
+            <li>Glacier and mountain photos look alike and are the most common mix-up, as are street and buildings.</li>
+            <li>The training photos are small (150 px), so very detailed photos lose detail when they are shrunk.</li>
+        </ul>
+    </section>
+
+    <section class="about-section" aria-labelledby="credits-title">
+        <h2 id="credits-title">Credits</h2>
+        <p>The original notebook, model design and Flask app come from <a href="https://github.com/sayamalt/natural-scenes-image-classification-using-cnns">sayamalt/natural-scenes-image-classification-using-cnns</a>. Team B2 retrained the model with a fixed training pipeline, hardened the backend and rebuilt the interface.</p>
+        <p>Team B2, Dept. of AIML, Dayananda Sagar College of Engineering: [Team member names to be added]</p>
+    </section>
+</article>
+{% endblock %}

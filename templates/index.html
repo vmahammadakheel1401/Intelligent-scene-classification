@@ -1,76 +1,119 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Natural Scenes Image Classification</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-        }
+{% extends "base.html" %}
 
-        h1 {
-            color: #533203;
-        }
+{% block content %}
+<div class="intro">
+    <h1>Which scene is this?</h1>
+    <p>Upload a photo and the model sorts it into one of six scene types, with how sure it is about each.</p>
+</div>
 
-        form {
-            margin: 20px 0;
-        }
+{% if not model_ready %}
+<div class="banner banner-error" role="alert">
+    <p><strong>The model isn't loaded, so classifying is switched off.</strong> Check that <code>natural_scenes_image_resnet_classifier.pt</code> is in the project folder, then restart the app.</p>
+    <details><summary>Technical detail</summary><code>{{ model_load_error }}</code></details>
+</div>
+{% endif %}
 
-        label[for="image"] {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            font-size: 1.2em;
-            color: #055023;
-        }
+<div class="workspace">
+    <form id="upload-form" class="panel upload" action="{{ url_for('predict') }}" method="post"
+          enctype="multipart/form-data" data-max-mb="{{ max_upload_mb }}" data-low="{{ low_confidence }}">
+        <h2 class="panel-title">Your photo</h2>
 
-        input[type="file"] {
-            text-align: center;
-            justify-content: center;
-            max-width: 300px;
-            margin: 10px;
-            margin-right: 5px;
-        }
+        <input type="file" id="image" name="image" accept="image/*" required class="file-input"
+               aria-describedby="file-hint form-error">
+        <label for="image" class="dropzone" id="dropzone">
+            <span class="dropzone-empty" id="dropzone-empty">
+                <svg class="icon icon-lg" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/><path d="M12 4v11M7.5 8.5 12 4l4.5 4.5"/>
+                </svg>
+                <span class="dropzone-title"><span class="js-only">Drop a photo here or </span><span class="link-like">choose a file</span></span>
+                <span class="dropzone-hint" id="file-hint">JPG, PNG, WEBP, BMP or GIF, up to {{ max_upload_mb }} MB</span>
+            </span>
+            <span class="dropzone-busy" aria-hidden="true"><span class="spinner"></span>Analysing…</span>
+        </label>
 
-        button[type="submit"] {
-            padding: 7px;
-            background-color: #b46c66;
-            color: #000000;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.2s ease-in-out;
-            border-radius: 5px;
-            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
-            margin-top: 3px;
-            font-weight: bold;
-            font-family:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
-            font-size: 1rem;
-            display: block;
-            margin: auto;
-        }
+        <p class="file-meta" id="file-meta" aria-live="polite">No photo chosen yet.</p>
+        <p class="form-error" id="form-error" role="alert" {% if not error %}hidden{% endif %}>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>
+            <span id="form-error-text">{{ error or '' }}</span>
+        </p>
 
-        #prediction {
-            margin-top: 20px;
-            font-size: 1.2em;
-            font-weight: bold;
-            color: rgba(20, 14, 202, 0.291);
-        }
-    </style>
-</head>
-<body>
-    <h1>Natural Scenes Image Classification</h1>
-
-    <form action="/predict" method="post" enctype="multipart/form-data">
-        <label for="image">Upload an image file:</label>
-        <input type="file" id="image" name="image">
-        <button type="submit">Submit</button>
+        <div class="actions">
+            <button type="submit" class="btn btn-primary" id="classify-btn" {% if not model_ready %}disabled{% endif %}>
+                <span class="spinner" aria-hidden="true"></span><span class="btn-label">Classify photo</span>
+            </button>
+            <button type="button" class="btn btn-quiet js-only" id="reset-btn" hidden>Try another photo</button>
+        </div>
     </form>
 
-    {% if prediction_text %}
-    <div id="prediction">{{ prediction_text }}</div>
-    {% endif %}
-</body>
-</html>
+    <section class="panel result" id="result" data-state="{{ 'done' if result else 'idle' }}" aria-labelledby="result-title">
+        <h2 class="panel-title" id="result-title">Result</h2>
+
+        <div class="verdict-block">
+            <p class="verdict" id="verdict">{{ result.label|capitalize if result else 'Waiting for a photo' }}</p>
+            <p class="confidence" id="confidence">
+                {% if result %}<span class="num">{{ (result.confidence * 100)|round|int }}%</span> confident{% else %}Pick a photo, or try a sample below.{% endif %}
+            </p>
+            <p class="verdict-desc" id="verdict-desc">{{ result.description if result else '' }}</p>
+            <p class="notice notice-unsure" id="notice-unsure" {% if not (result and result.low_confidence) %}hidden{% endif %}>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19Z"/><path d="M12 10v4.5M12 17.5v.01"/></svg>
+                <span><strong>Not sure.</strong> No scene reached {{ (low_confidence * 100)|int }}%, so this photo may mix several scenes or not be one of the six.</span>
+            </p>
+        </div>
+
+        <h3 class="spectrum-title">All six scenes</h3>
+        <ol class="spectrum" id="spectrum">
+            {% set probs = {} %}
+            {% if result %}{% for p in result.probabilities %}{% set _ = probs.update({p.label: p.probability}) %}{% endfor %}{% endif %}
+            {% set ranks = {} %}
+            {% if result %}{% for t in result.top3 %}{% set _ = ranks.update({t.label: loop.index}) %}{% endfor %}{% endif %}
+            {% for c in classes %}
+            {% set p = probs.get(c.name, 0) %}
+            <li class="scene{% if ranks.get(c.name) == 1 %} is-top{% endif %}" data-class="{{ c.name }}" style="--p: {{ p }}">
+                <img class="scene-thumb" src="{{ url_for('static', filename='thumbs/' ~ c.thumb.rsplit('.', 1)[0] ~ '.jpg') }}" alt="" width="56" height="42" loading="lazy">
+                <div class="scene-body">
+                    <div class="scene-head">
+                        <span class="scene-name">{{ c.name|capitalize }}</span>
+                        <span class="scene-rank" {% if not ranks.get(c.name) %}hidden{% endif %}>#{{ ranks.get(c.name, '') }}</span>
+                        <span class="scene-pct num">{% if result %}{{ '%.1f'|format(p * 100) }}%{% else %}–{% endif %}</span>
+                    </div>
+                    <div class="bar" role="presentation"><span class="bar-fill"></span></div>
+                    <p class="scene-info">{{ c.info }}</p>
+                </div>
+            </li>
+            {% endfor %}
+        </ol>
+        <p class="visually-hidden" id="result-announce" aria-live="polite"></p>
+    </section>
+</div>
+
+<section class="samples js-only" aria-labelledby="samples-title">
+    <div class="section-head">
+        <h2 id="samples-title">Try a sample photo</h2>
+        <p>Click any photo to classify it. The caption is what the photo really shows, so you can check the model.</p>
+    </div>
+    <ul class="sample-grid">
+        {% for s in samples %}
+        <li>
+            <button type="button" class="sample" data-src="{{ url_for('static', filename=s.file) }}" data-name="{{ s.file }}"
+                    {% if not model_ready %}disabled{% endif %}>
+                <img src="{{ url_for('static', filename='thumbs/' ~ s.thumb) }}" alt="" width="240" height="180" loading="lazy">
+                <span class="sample-caption">{{ s.label|capitalize }}<span class="visually-hidden"> sample photo, classify it</span></span>
+            </button>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+
+<section class="history js-only" id="history" aria-labelledby="history-title" hidden>
+    <div class="section-head section-head-row">
+        <h2 id="history-title">Your recent results</h2>
+        <button type="button" class="btn btn-quiet btn-small" id="history-clear">Clear</button>
+    </div>
+    <p class="history-note">Saved only in this browser.</p>
+    <ul class="history-list" id="history-list"></ul>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}
