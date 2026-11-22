@@ -8,14 +8,14 @@
 
 {% if not model_ready %}
 <div class="banner banner-error" role="alert">
-    <p><strong>The model isn't loaded, so classifying is switched off.</strong> Check that <code>natural_scenes_image_resnet_classifier.pt</code> is in the project folder, then restart the app.</p>
+    <p><strong>The model isn't loaded, so classifying is switched off.</strong> Check that <code>model.onnx</code> is in the project folder, then restart the app.</p>
     <details><summary>Technical detail</summary><code>{{ model_load_error }}</code></details>
 </div>
 {% endif %}
 
 <div class="workspace">
     <form id="upload-form" class="panel upload" action="{{ url_for('predict') }}" method="post"
-          enctype="multipart/form-data" data-max-mb="{{ max_upload_mb }}" data-low="{{ low_confidence }}">
+          enctype="multipart/form-data" data-max-mb="{{ max_upload_mb }}" data-pick-mb="{{ max_pick_mb }}" data-low="{{ low_confidence }}">
         <h2 class="panel-title">Your photo</h2>
 
         <input type="file" id="image" name="image" accept="image/*" required class="file-input"

@@ -5,7 +5,11 @@
     var form = document.getElementById('upload-form');
     if (!form) return;
 
-    var MAX_MB = parseFloat(form.dataset.maxMb) || 10;
+    // With JavaScript, big photos are shrunk before upload, so the page can accept larger files
+    // than the server limit (data-max-mb, used by the no-JavaScript form).
+    var MAX_MB = parseFloat(form.dataset.pickMb) || parseFloat(form.dataset.maxMb) || 10;
+    var hint = document.getElementById('file-hint');
+    if (hint) hint.textContent = hint.textContent.replace(/up to [\d.]+ MB/, 'up to ' + MAX_MB + ' MB');
     var LOW = parseFloat(form.dataset.low) || 0.5;
     var ALLOWED = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'];
     var HISTORY_KEY = 'scene-history';
@@ -175,6 +179,34 @@
             (data.confidence < LOW ? ' The model is not sure about this photo.' : '');
     }
 
+    // Big photos are shrunk in the browser before upload: the model only needs 224 px, and
+    // Vercel rejects requests over 4.5 MB. Small files are sent as they are.
+    var SHRINK_OVER_BYTES = 1.5 * 1024 * 1024;
+    var SHRINK_TO_PX = 1024;
+
+    function shrinkForUpload(file) {
+        if (file.size <= SHRINK_OVER_BYTES || !window.HTMLCanvasElement) return Promise.resolve(file);
+        return new Promise(function (resolve) {
+            var url = URL.createObjectURL(file);
+            var img = new Image();
+            img.onload = function () {
+                var scale = Math.min(1, SHRINK_TO_PX / Math.max(img.naturalWidth, img.naturalHeight));
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+                canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                URL.revokeObjectURL(url);
+                canvas.toBlob(function (blob) {
+                    if (!blob) return resolve(file);
+                    var name = file.name.replace(/\.[^.]*$/, '') + '.jpg';
+                    resolve(new File([blob], name, { type: 'image/jpeg' }));
+                }, 'image/jpeg', 0.9);
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+            img.src = url;
+        });
+    }
+
     function classify() {
         if (busy) return;
         if (!currentFile) {
@@ -184,10 +216,12 @@
         }
         clearError();
         setBusy(true);
-        var body = new FormData();
-        body.append('image', currentFile, currentFile.name);
-
-        fetch(form.dataset.api || '/api/predict', { method: 'POST', body: body })
+        shrinkForUpload(currentFile)
+            .then(function (upload) {
+                var body = new FormData();
+                body.append('image', upload, upload.name);
+                return fetch(form.dataset.api || '/api/predict', { method: 'POST', body: body });
+            })
             .then(function (res) {
                 return res.json().catch(function () {
                     throw new Error(res.status === 413 ? 'That photo is too big. Please choose one smaller than ' + MAX_MB + ' MB.' : 'The server sent an unexpected reply. Please try again.');

@@ -12,7 +12,7 @@ A web app that looks at a photo and says which of six scene types it shows (**bu
 
 ## Features
 
-- **Upload, drag and drop, or paste** a photo (JPG, PNG, WEBP, BMP or GIF, up to 10 MB), with a preview.
+- **Upload, drag and drop, or paste** a photo (JPG, PNG, WEBP, BMP or GIF, up to 25 MB; big photos are shrunk in the browser before upload), with a preview.
 - **Results without reloading the page**: the predicted scene, the confidence, and a bar for **all six scenes** with the top 3 ranked.
 - **Honest uncertainty**: a "Not sure" warning when no scene reaches 50%.
 - **11 sample photos** you can click to test the model, captioned with what each photo really shows.
@@ -39,14 +39,18 @@ static/
   thumbs/                       Small versions of the sample photos
   test_image_*.jpg              sample photos (11 shown in the app)
   favicon.svg
-natural_scenes_image_resnet_classifier.pt   Model weights used by the app
+model.onnx                      The model the app runs (ONNX format, 49 MB)
+natural_scenes_image_resnet_classifier.pt   Same model in PyTorch format (used for training and export)
 model_meta.json                 Input size, classes and test results of the current model (read by the app)
 training/
   extract_features.py           CPU training step 1: ResNet50 features for every photo
   train_head.py                 CPU training step 2: train the head, test it, save the model
+  export_onnx.py                Step 3: convert the .pt model to model.onnx for the app
 train_resnet50_v2.ipynb         GPU training notebook that also fine-tunes layer4 (run on Kaggle)
 natural-scenes-image-classification-using-cnns.ipynb   Original notebook (kept for reference)
-requirements.txt                Python packages (pinned versions)
+requirements.txt                Packages for the app (pinned versions, no PyTorch)
+requirements-train.txt          Extra packages for retraining (PyTorch, ONNX, pyarrow)
+.vercelignore, .python-version  Vercel deployment settings
 Dockerfile, .dockerignore       Container setup (CPU-only)
 docs/                           Screenshots for this README
 ```
@@ -68,7 +72,6 @@ git clone https://github.com/vmahammadakheel1401/Intelligent-scene-classificatio
 cd Intelligent-scene-classification
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 python app.py
 ```
@@ -82,12 +85,11 @@ If PowerShell refuses to run `Activate.ps1`, run `Set-ExecutionPolicy -Scope Cur
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 python app.py
 ```
 
-The first command installs the small CPU-only version of PyTorch. If you have an NVIDIA GPU, you can install PyTorch from [pytorch.org](https://pytorch.org/get-started/locally/) instead; the app uses the GPU automatically.
+The app runs the model with [ONNX Runtime](https://onnxruntime.ai/), so it does not need PyTorch (PyTorch is only needed to retrain the model).
 
 ### Options
 
@@ -95,7 +97,8 @@ The first command installs the small CPU-only version of PyTorch. If you have an
 |---|---|---|
 | `PORT` | `8000` | Port for `python app.py` |
 | `FLASK_DEBUG` | off | Set to `1` for development error pages (never in a demo or on a server) |
-| `MODEL_PATH` | `natural_scenes_image_resnet_classifier.pt` | Use a different model file |
+| `MODEL_PATH` | `model.onnx` | Use a different ONNX model file |
+| `ORT_THREADS` | `0` (all cores) | CPU threads ONNX Runtime may use |
 | `MODEL_META_PATH` | `model_meta.json` | Use a different metadata file |
 
 ## Run it with Docker
@@ -105,13 +108,23 @@ docker build -t scene-classifier .
 docker run -p 8000:8000 scene-classifier
 ```
 
-Then open http://localhost:8000. The image uses CPU-only PyTorch and runs gunicorn with 2 workers.
+Then open http://localhost:8000. The image uses ONNX Runtime (no PyTorch) and runs gunicorn with 2 workers.
+
+## Deploy on Vercel
+
+The app is set up for Vercel's built-in Flask support: `app.py` exposes the Flask `app`, `requirements.txt` has only small packages (ONNX Runtime instead of PyTorch, which is far over Vercel's size limit; the whole upload is about 240 MB, under the 250 MB limit for a Vercel function), `.python-version` picks Python 3.12, and `.vercelignore` leaves training files, the `.pt` model and the dataset out of the upload.
+
+1. On [vercel.com](https://vercel.com): **Add New → Project**, import this GitHub repo.
+2. **Framework Preset:** Flask (Vercel usually detects it). Leave the build and output settings empty.
+3. **Deploy.** Every push to `main` deploys again.
+
+Vercel limits a request to 4.5 MB, so the page shrinks big photos to 1,024 px in the browser before uploading (the model only looks at 224 px anyway). The plain HTML form used without JavaScript cannot do this, so very large photos only work with JavaScript on.
 
 ## Retrain on your own computer (CPU, no GPU needed)
 
 This is how the model in this repo was made. It takes about 45 minutes on a laptop CPU, almost all of it in step 2.
 
-1. Install the extra package: `pip install pyarrow`
+1. Install the training packages: `pip install -r requirements-train.txt`
 2. Download the dataset (about 258 MB) from the public Hugging Face mirror [sfarrukhm/intel-image-classification](https://huggingface.co/datasets/sfarrukhm/intel-image-classification), which has the same 14,034 training and 3,000 test photos as the Kaggle original:
 
    ```powershell
@@ -123,7 +136,8 @@ This is how the model in this repo was made. It takes about 45 minutes on a lapt
    (`data/` is in `.gitignore`, so the dataset is never committed.)
 3. Turn every photo into ResNet50 features (the slow part, done once): `python training/extract_features.py data/hf V2`
 4. Train the head, test it and save the model (takes about a minute): `python training/train_head.py data/hf/features_V2.pt . --save`
-5. Restart the app. The About page now shows the new results from `model_meta.json`.
+5. Convert it for the app: `python training/export_onnx.py natural_scenes_image_resnet_classifier.pt model.onnx`
+6. Restart the app. The About page now shows the new results from `model_meta.json`.
 
 How it works: the ResNet50 backbone (ImageNet weights) is frozen, so each photo only has to go through it once. Its 2,048 features, for the photo and its mirror image, are saved, and the small head is trained on them for 40 epochs. 10% of the training photos are held back to pick the best epoch, and the 3,000 test photos are used only once, for the final score.
 
@@ -136,7 +150,7 @@ Fine-tunes the last ResNet block as well, which should add a few percent. Takes 
 3. **Session options:** Accelerator **GPU T4 x2** (or P100), Internet **On** (needed to download the ImageNet weights; requires a phone-verified Kaggle account).
 4. **Run All.**
 5. From the **Output** panel, download `natural_scenes_image_resnet_classifier.pt` (about 49 MB) and `model_meta.json`.
-6. Put both files in the project folder (replace the old `.pt`), restart the app, and commit them.
+6. Put both files in the project folder (replace the old `.pt`), run `python training/export_onnx.py natural_scenes_image_resnet_classifier.pt model.onnx`, restart the app, and commit all three files.
 
 What the v2 notebook fixes compared with the original:
 
@@ -210,7 +224,7 @@ What Team B2 added or changed:
 - Found that the model file in the repo was untrained (classifier head at random initialisation, ~17% per class), retrained it (93.1% test accuracy) with the scripts in `training/`, and wrote `train_resnet50_v2.ipynb` with the original notebook's training bugs fixed.
 - Rewrote the backend: input validation, friendly errors instead of crashes, top-3 and all-class probabilities, a JSON API, a 10 MB upload limit, debug mode off by default, a safe weights-only model loader.
 - Rebuilt the whole interface: preview, drag and drop, samples, confidence bars, uncertainty warning, history, dark mode, mobile layout, accessibility, About page.
-- Cleaned the repo (removed broken Git LFS pointer files, pinned versions, smaller CPU Docker image) and wrote this README.
+- Cleaned the repo (removed broken Git LFS pointer files, pinned versions, smaller CPU Docker image), switched the app to ONNX Runtime so it fits on Vercel, and wrote this README.
 
 Dataset: [Intel Image Classification](https://www.kaggle.com/datasets/puneet6060/intel-image-classification) (originally published by Intel for an Analytics Vidhya challenge).
 
