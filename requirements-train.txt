@@ -1,0 +1,8 @@
+# Extra packages for retraining the model and exporting it to ONNX (not needed to run the app).
+# For a smaller CPU-only PyTorch, install torch/torchvision first from
+#   https://download.pytorch.org/whl/cpu  (see README).
+-r requirements.txt
+torch==2.15.0
+torchvision==0.29.2
+onnx==1.23.2
+pyarrow==26.0.1

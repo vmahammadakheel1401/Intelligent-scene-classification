@@ -10,19 +10,21 @@ import json
 import os
 import warnings
 
-import torch
+import numpy as np
+import onnxruntime as ort
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 from PIL import Image, ImageOps
-from torch import nn
-from torchvision import models, transforms
 
 warnings.filterwarnings("ignore")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.environ.get("MODEL_PATH", os.path.join(BASE_DIR, "natural_scenes_image_resnet_classifier.pt"))
+# ONNX version of the trained model (made by training/export_onnx.py). ONNX Runtime is ~80 MB installed,
+# PyTorch is over 1 GB, which is why the app can run on Vercel.
+MODEL_PATH = os.environ.get("MODEL_PATH", os.path.join(BASE_DIR, "model.onnx"))
 META_PATH = os.environ.get("MODEL_META_PATH", os.path.join(BASE_DIR, "model_meta.json"))
 
-MAX_UPLOAD_MB = 10
+MAX_UPLOAD_MB = 10  # largest file the server accepts
+MAX_PICK_MB = 25  # largest photo the page accepts; it shrinks big photos before uploading
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "bmp", "gif"}
 LOW_CONFIDENCE = 0.50  # below this, the page says "not sure"
 
@@ -86,52 +88,28 @@ def load_meta():
     return meta
 
 
-def build_resnet(num_classes):
-    """Same architecture as the training notebook (ResNet50 + small head)."""
-    net = models.resnet50(weights=None)
-    net.fc = nn.Sequential(
-        nn.Linear(2048, 512), nn.ReLU(inplace=True), nn.Dropout(p=0.3),
-        nn.Linear(512, 128), nn.ReLU(inplace=True), nn.Dropout(p=0.2),
-        nn.Linear(128, num_classes), nn.LogSoftmax(dim=1),
-    )
-    return net
+def load_model(path):
+    opts = ort.SessionOptions()
+    opts.intra_op_num_threads = int(os.environ.get("ORT_THREADS", "0"))  # 0 = use all cores
+    return ort.InferenceSession(path, sess_options=opts, providers=["CPUExecutionProvider"])
 
-
-def load_model(path, num_classes):
-    """Loads either a weights-only file (new notebook) or a whole pickled model (original file)."""
-    try:
-        obj = torch.load(path, map_location="cpu", weights_only=True)  # safe loader
-    except FileNotFoundError:
-        raise
-    except Exception:
-        # The original file is a whole pickled model, which the safe loader refuses.
-        # Only load it this way because it is our own file.
-        obj = torch.load(path, map_location="cpu", weights_only=False)
-    if isinstance(obj, dict):
-        net = build_resnet(num_classes)
-        net.load_state_dict(obj.get("state_dict", obj))  # fp16 weights are cast to fp32 here
-    else:
-        net = obj
-    return net.float().eval()
-
-
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-elif torch.backends.mps.is_available():
-    device = torch.device("mps")
-else:
-    device = torch.device("cpu")
 
 meta = load_meta()
 CLASSES = meta.get("classes", CLASSES)
-transform = transforms.Compose([
-    transforms.Resize(size=(meta["img_size"], meta["img_size"])),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
+MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+
+def preprocess(image):
+    """Same steps as training: resize to a square, scale to 0-1, ImageNet normalisation, CHW."""
+    size = meta["img_size"]
+    arr = np.asarray(image.resize((size, size), Image.BILINEAR), dtype=np.float32) / 255.0
+    arr = (arr - MEAN) / STD
+    return arr.transpose(2, 0, 1)[None]  # shape (1, 3, H, W)
+
 
 try:
-    model = load_model(MODEL_PATH, len(CLASSES)).to(device)
+    model = load_model(MODEL_PATH)
     model_load_error = None
 except Exception as exc:  # the page still loads and explains the problem
     model = None
@@ -157,11 +135,9 @@ def classify(file_storage):
     except Exception:
         raise UserError("We couldn't read that file as an image. It may be damaged or not really an image.")
 
-    x = transform(image).unsqueeze(0).to(device)
-    with torch.no_grad():
-        probs = model(x).exp()[0].cpu()  # the model ends in LogSoftmax, so exp() gives probabilities
-    top = torch.topk(probs, k=3)
-    top3 = [{"label": CLASSES[i], "probability": round(float(p), 4)} for p, i in zip(top.values, top.indices)]
+    log_probs = model.run(None, {model.get_inputs()[0].name: preprocess(image)})[0][0]
+    probs = np.exp(log_probs)  # the model ends in LogSoftmax, so exp() gives probabilities
+    top3 = [{"label": CLASSES[i], "probability": round(float(probs[i]), 4)} for i in np.argsort(-probs)[:3]]
     best = top3[0]
     return {
         "ok": True,
@@ -180,7 +156,7 @@ def page_context(**extra):
     samples = [{"file": f, "thumb": os.path.splitext(f)[0] + ".jpg", "label": lbl} for f, lbl in SAMPLE_LABELS.items()]
     classes = [{"name": c, "info": CLASS_INFO.get(c, ""), "thumb": CLASS_THUMBS.get(c)} for c in CLASSES]
     ctx = dict(classes=classes, samples=samples,
-               max_upload_mb=MAX_UPLOAD_MB, low_confidence=LOW_CONFIDENCE, model_ready=model is not None,
+               max_upload_mb=MAX_UPLOAD_MB, max_pick_mb=MAX_PICK_MB, low_confidence=LOW_CONFIDENCE, model_ready=model is not None,
                model_load_error=model_load_error, meta=meta)
     ctx.update(extra)
     return ctx
