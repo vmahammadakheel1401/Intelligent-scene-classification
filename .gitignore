@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Editors / tools
+.vscode/
+.idea/
+.claude/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Training data (download from Kaggle instead of committing it)
+data/
+seg_train/
+seg_test/
+seg_pred/
