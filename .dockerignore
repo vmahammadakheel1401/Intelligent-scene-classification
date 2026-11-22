@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.ipynb
+.ipynb_checkpoints
+.claude
+.impeccable
+PRODUCT.md
+DESIGN.md
+docs
+data
+Dockerfile
+.dockerignore

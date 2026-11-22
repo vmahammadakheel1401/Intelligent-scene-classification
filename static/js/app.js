@@ -274,6 +274,7 @@
                     var file = new File([blob], btn.dataset.name, { type: blob.type || 'image/jpeg' });
                     if (setFile(file)) {
                         classify();
+                        if (btn.dataset.auto) { delete btn.dataset.auto; return; }  // demo link: stay at the top
                         form.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
                     }
                 })
@@ -360,4 +361,13 @@
 
     // A result rendered by the server (no-JS fallback) has no preview; start clean either way.
     renderHistory();
+
+    // Demo links: /?sample=test_image_3.jpg classifies that bundled sample straight away.
+    try {
+        var wanted = new URLSearchParams(window.location.search).get('sample');
+        if (wanted) {
+            var match = Array.prototype.find.call(document.querySelectorAll('.sample'), function (b) { return b.dataset.name === wanted; });
+            if (match && !match.disabled) { match.dataset.auto = '1'; match.click(); }
+        }
+    } catch (e) { /* old browser: ignore */ }
 })();
