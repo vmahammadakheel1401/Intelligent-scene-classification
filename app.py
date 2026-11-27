@@ -43,8 +43,8 @@ CLASS_INFO = {
     "sea": "Open water, beaches, coastlines and waves.",
     "street": "Roads and lanes seen from street level, with buildings alongside.",
 }
-COMPARISON_GAP = 0.15  # top two this close (for a look-alike pair) = "close call"
-MIXED_MIN = 0.20  # second scene at least this likely = "mixed scene"
+COMPARISON_GAP = 0.10  # top two this close (for a look-alike pair) = "close call" (tuned on real photos)
+MIXED_MIN = 0.30  # second scene at least this likely = "mixed scene" (tuned on real photos)
 SIMILAR_CLASS_GUIDANCE = {
     frozenset(("glacier", "mountain")):
         "Look for broad ice fields or icebergs (glacier) versus rocky peaks or ridges (mountain).",

@@ -19,6 +19,10 @@
     var PARALLEL = 2;         // batches in flight at the same time
     var ALLOWED = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'];
     var HEIC = ['heic', 'heif'];
+    // An "unusual" photo only goes to "Check these" when the model is also less than this sure.
+    // Tuned on 126 real photos + the 3,000 test photos: fewer photos to check by hand, and still
+    // no non-scene photo (dark museum rooms, a night club) lands in a scene folder.
+    var UNUSUAL_CHECK_BELOW = 0.90;
 
     var FOLDERS = [
         { id: 'mountain', name: 'Mountain' },
@@ -256,8 +260,11 @@
         var guess = capitalize(r.label) + ' ' + pct(r.confidence);
         if (r.in_scope === false) return { folder: 'not-a-scene', note: "Doesn't look like a scene" };
         if (r.comparison) return { folder: 'check', note: r.comparison.title || ('Close call: ' + guess) };
-        if (r.scene_check && r.scene_check.status === 'unusual') return { folder: 'check', note: 'Unusual photo · best guess ' + guess };
+        if (r.scene_check && r.scene_check.status === 'unusual' && r.confidence < UNUSUAL_CHECK_BELOW) {
+            return { folder: 'check', note: 'Unusual photo · best guess ' + guess };
+        }
         if (r.confidence < LOW) return { folder: 'check', note: 'Not sure · best guess ' + guess };
+        if (r.scene_check && r.scene_check.status === 'unusual') return { folder: r.label, note: pct(r.confidence) + ' confident · unusual photo' };
         return { folder: r.label, note: pct(r.confidence) + ' confident' };
     }
 

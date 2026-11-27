@@ -15,7 +15,7 @@
             <li><strong>Look at it.</strong> A ResNet50 network, first trained on 1.2 million ImageNet photos, turns the image into 2,048 numbers that describe what it sees.</li>
             <li><strong>Decide.</strong> A small classifier head (2048 → 512 → 128 → 6) turns those numbers into a probability for each of the six scenes. The highest one is the answer.</li>
             <li><strong>Check it is a scene at all.</strong> The same 2,048 numbers are compared with 48 typical training photos (8 per scene). A photo far from all of them, such as an object, a person or an emoji, is shown as <em>Not a scene photo</em> instead of being forced into one of the six. A photo that is only a little unusual gets a warning.</li>
-            <li><strong>Explain mixed photos.</strong> When a second scene is also likely (20% or more), for example a building covered in trees, the page says it is a mixed scene.</li>
+            <li><strong>Explain mixed photos.</strong> When a second scene is also likely (30% or more), for example a building covered in trees, the page says it is a mixed scene.</li>
         </ol>
     </section>
 

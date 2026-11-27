@@ -69,7 +69,7 @@ docs/                           Screenshots for this README
 2. **Extract features.** ResNet50, pre-trained on ImageNet's 1.2 million photos, turns the image into 2,048 numbers that describe what it sees.
 3. **Classify.** A small head (2048 → 512 → 128 → 6, ending in LogSoftmax) turns those numbers into a probability for each scene. The highest one is the answer.
 4. **Check it is a scene at all.** The model always picks one of the six, even for a trash can. So the 2,048 numbers are also compared (cosine similarity) with 48 "typical photo" points: 8 k-means centres per scene from the training photos. If the photo is far from all of them it is shown as **Not a scene photo**; if it is only a bit far, the answer gets an **Unusual photo** warning. The cut-offs are set so that only 1% (not a scene) and 5% (unusual) of held-back real scene photos are flagged.
-5. **Explain mixed photos.** If the second scene is 20% or more, the page shows **Mixed scene: A and B**.
+5. **Explain mixed photos.** If the second scene is 30% or more, the page shows **Mixed scene: A and B**. Glacier/mountain and buildings/street within 10% of each other get a **Close call** note instead.
 
 How well the scene check works (photos the model never saw):
 
