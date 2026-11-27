@@ -310,5 +310,12 @@
       "train_loss": 0.4365,
       "val_accuracy": 0.928
     }
-  ]
+  ],
+  "scene_check": {
+    "method": "cosine similarity of the ResNet50 features to 8 k-means centres per scene (48 in total)",
+    "unusual_below": 0.559,
+    "not_scene_below": 0.4071,
+    "test_photos_flagged_not_scene": 0.012,
+    "test_photos_flagged_unusual": 0.029
+  }
 }

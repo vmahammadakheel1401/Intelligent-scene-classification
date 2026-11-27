@@ -28,9 +28,27 @@ state = torch.load(src, map_location="cpu", weights_only=True)
 net.load_state_dict(state.get("state_dict", state))
 net = net.float().eval()
 
+
+class WithFeatures(nn.Module):
+    """Outputs the scene log-probabilities and the 2,048 backbone features (used by the scene check)."""
+
+    def __init__(self, m):
+        super().__init__()
+        self.m = m
+
+    def forward(self, x):
+        m = self.m
+        x = m.maxpool(m.relu(m.bn1(m.conv1(x))))
+        x = m.layer4(m.layer3(m.layer2(m.layer1(x))))
+        feats = torch.flatten(m.avgpool(x), 1)
+        return m.fc(feats), feats
+
+
 tmp = dst + ".fp32.onnx"
-torch.onnx.export(net, torch.zeros(1, 3, 224, 224), tmp, input_names=["image"], output_names=["log_probs"],
-                  dynamic_axes={"image": {0: "batch"}, "log_probs": {0: "batch"}}, opset_version=17, dynamo=False)
+torch.onnx.export(WithFeatures(net), torch.zeros(1, 3, 224, 224), tmp, input_names=["image"],
+                  output_names=["log_probs", "features"],
+                  dynamic_axes={"image": {0: "batch"}, "log_probs": {0: "batch"}, "features": {0: "batch"}},
+                  opset_version=17, dynamo=False)
 
 # Store every large float32 weight as float16 + a Cast node back to float32.
 model = onnx.load(tmp)

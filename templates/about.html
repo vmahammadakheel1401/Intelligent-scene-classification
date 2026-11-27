@@ -14,6 +14,8 @@
             <li><strong>Prepare the photo.</strong> It is resized to {{ meta.img_size }} × {{ meta.img_size }} pixels and its colours are normalised the same way as during training.</li>
             <li><strong>Look at it.</strong> A ResNet50 network, first trained on 1.2 million ImageNet photos, turns the image into 2,048 numbers that describe what it sees.</li>
             <li><strong>Decide.</strong> A small classifier head (2048 → 512 → 128 → 6) turns those numbers into a probability for each of the six scenes. The highest one is the answer.</li>
+            <li><strong>Check it is a scene at all.</strong> The same 2,048 numbers are compared with 48 typical training photos (8 per scene). A photo far from all of them, such as an object, a person or an emoji, is shown as <em>Not a scene photo</em> instead of being forced into one of the six. A photo that is only a little unusual gets a warning.</li>
+            <li><strong>Explain mixed photos.</strong> When a second scene is also likely (30% or more), for example a building covered in trees, the page says it is a mixed scene.</li>
         </ol>
     </section>
 
@@ -91,7 +93,7 @@
     <section class="about-section" aria-labelledby="limits-title">
         <h2 id="limits-title">Limitations</h2>
         <ul class="plain-list">
-            <li>It only knows six scenes. A photo of a desert, a room or a person still gets one of the six answers, which is why the page warns when confidence is low.</li>
+            <li>It only knows six scenes. Photos that look nothing like them (objects, people, emoji, screenshots) are usually caught as <em>Not a scene photo</em>, but not always: in our tests it caught all product photos and emoji and about 87% of everyday object photos, and it wrongly flags about 1% of real scene photos.</li>
             <li>Glacier and mountain photos look alike and are the most common mix-up, as are street and buildings.</li>
             <li>The training photos are small (150 px), so very detailed photos lose detail when they are shrunk.</li>
         </ul>

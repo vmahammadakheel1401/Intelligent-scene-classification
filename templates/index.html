@@ -45,22 +45,27 @@
         </div>
     </form>
 
-    <section class="panel result" id="result" data-state="{{ 'done' if result else 'idle' }}" aria-labelledby="result-title verdict">
+    {% set out_of_scope = result and result.in_scope is defined and not result.in_scope %}
+    <section class="panel result{% if out_of_scope %} is-out-of-scope{% endif %}" id="result" data-state="{{ 'done' if result else 'idle' }}" aria-labelledby="result-title verdict">
         <h2 class="visually-hidden" id="result-title">Result</h2>
 
         <div class="verdict-block">
-            <h3 class="verdict" id="verdict">{{ result.label|capitalize if result else 'Waiting for a photo' }}</h3>
+            <h3 class="verdict" id="verdict">{% if out_of_scope %}Not a scene photo{% elif result %}{{ result.label|capitalize }}{% else %}Waiting for a photo{% endif %}</h3>
             <p class="confidence" id="confidence">
-                {% if result %}<span class="num">{{ (result.confidence * 100)|round|int }}%</span> confident{% else %}Pick a photo, or try a sample below.{% endif %}
+                {% if out_of_scope %}Doesn't match any of the six scenes{% elif result %}<span class="num">{{ (result.confidence * 100)|round|int }}%</span> confident{% else %}Pick a photo, or try a sample below.{% endif %}
             </p>
-            <p class="verdict-desc" id="verdict-desc">{{ result.description if result else '' }}</p>
-            <p class="notice notice-unsure" id="notice-unsure" {% if not (result and result.low_confidence) %}hidden{% endif %}>
+            <p class="verdict-desc" id="verdict-desc">{% if out_of_scope %}It doesn't look like buildings, a forest, a glacier, a mountain, the sea or a street. It may be an object, a person, a drawing or a screenshot. Try a photo of one of the six scenes. (If it had to pick, the model would say {{ result.label }}, {{ (result.confidence * 100)|round|int }}%.){% elif result %}{{ result.description }}{% endif %}</p>
+            <p class="notice notice-unsure" id="notice-unsure" {% if not (result and result.low_confidence and not result.comparison and not out_of_scope) %}hidden{% endif %}>
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19Z"/><path d="M12 10v4.5M12 17.5v.01"/></svg>
                 <span><strong>Not sure.</strong> No scene reached {{ (low_confidence * 100)|int }}%, so this photo may mix several scenes or not be one of the six.</span>
             </p>
+            <p class="notice notice-scope" id="notice-scope" {% if not (result and result.scene_check and result.scene_check.status == 'unusual') %}hidden{% endif %}>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16v.01"/></svg>
+                <span><strong>Unusual photo.</strong> It looks different from the photos the model learned from, so treat this answer with care.</span>
+            </p>
             <aside class="notice notice-comparison" id="notice-comparison" role="note"
                    {% if not (result and result.comparison) %}hidden{% endif %}>
-                <strong id="comparison-title">{% if result and result.comparison %}Close call: {{ result.comparison.first_label|capitalize }} or {{ result.comparison.second_label|capitalize }}?{% endif %}</strong>
+                <strong id="comparison-title">{% if result and result.comparison %}{{ result.comparison.title or ('Close call: ' ~ result.comparison.first_label|capitalize ~ ' or ' ~ result.comparison.second_label|capitalize ~ '?') }}{% endif %}</strong>
                 <p class="comparison-scores" id="comparison-scores">
                     {% if result and result.comparison %}{{ result.comparison.first_label|capitalize }} {{ '%.1f'|format(result.comparison.first_probability * 100) }}% · {{ result.comparison.second_label|capitalize }} {{ '%.1f'|format(result.comparison.second_probability * 100) }}%{% endif %}
                 </p>

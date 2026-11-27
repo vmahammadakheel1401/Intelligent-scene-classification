@@ -16,6 +16,9 @@ A web app that looks at a photo and says which of six scene types it shows (**bu
 - **Results without reloading the page**: the predicted scene, the confidence, and a bar for **all six scenes** with the top 3 ranked.
 - **Close-call guidance** for glacier/mountain and buildings/street when the top two scores differ by no more than 15 percentage points.
 - **Honest uncertainty**: a "Not sure" warning when no scene reaches 50%.
+- **Photo organizer** (`/organize`): add a whole folder of up to 200 trip photos and get them sorted into Mountain, Sea, Forest, Glacier, Buildings, Street, **Check these** (mixed or unsure) and **Not a scene** folders. Move any photo to another folder, then download everything as a zip of your **original** photos with a `report.csv`. Photos are shrunk in the browser before sending, so 100 photos is only about 5 MB of upload, and nothing is stored on the server.
+- **"Not a scene photo" detection**: photos that are none of the six scenes (a trash can, a person, an emoji) are rejected instead of being forced into one, and unusual photos get a warning.
+- **Mixed scenes**: when two scenes are both likely (for example a building covered in trees), the page says so, and look-alike pairs (glacier/mountain, buildings/street) get a "close call" tip.
 - **11 sample photos** you can click to test the model, captioned with what each photo really shows.
 - **Recent results**, saved only in your browser.
 - **Light and dark mode**: follows your system setting, with a toggle.
@@ -31,11 +34,13 @@ app.py                          Flask app: routes, validation, model loading, pr
 templates/
   base.html                     Shared layout (header, theme toggle, footer)
   index.html                    Classify page
+  organize.html                 Photo organizer page
   about.html                    About the model page
   error.html                    Friendly 404 / 500 page
 static/
   css/style.css                 All styles (light and dark themes)
   js/app.js                     Upload, preview, validation, results, samples, history
+  js/organize.js                Photo organizer: folder reading, batching, folders, zip download
   js/theme.js                   Light/dark toggle
   thumbs/                       Small versions of the sample photos
   test_image_*.jpg              sample photos (11 shown in the app)
@@ -43,10 +48,12 @@ static/
 model.onnx                      The model the app runs (ONNX format, 49 MB)
 natural_scenes_image_resnet_classifier.pt   Same model in PyTorch format (used for training and export)
 model_meta.json                 Input size, classes and test results of the current model (read by the app)
+scene_check.npz                 48 reference points + cut-offs for the "Not a scene photo" check (180 KB)
 training/
   extract_features.py           CPU training step 1: ResNet50 features for every photo
   train_head.py                 CPU training step 2: train the head, test it, save the model
   export_onnx.py                Step 3: convert the .pt model to model.onnx for the app
+  build_scene_check.py          Step 4: build scene_check.npz for the "Not a scene photo" check
 train_resnet50_v2.ipynb         GPU training notebook that also fine-tunes layer4 (run on Kaggle)
 natural-scenes-image-classification-using-cnns.ipynb   Original notebook (kept for reference)
 requirements.txt                Packages for the app (pinned versions, no PyTorch)
@@ -61,6 +68,17 @@ docs/                           Screenshots for this README
 1. **Prepare the photo.** It is resized to 224 × 224 pixels (128 × 128 for the old model) and normalised the same way as during training.
 2. **Extract features.** ResNet50, pre-trained on ImageNet's 1.2 million photos, turns the image into 2,048 numbers that describe what it sees.
 3. **Classify.** A small head (2048 → 512 → 128 → 6, ending in LogSoftmax) turns those numbers into a probability for each scene. The highest one is the answer.
+4. **Check it is a scene at all.** The model always picks one of the six, even for a trash can. So the 2,048 numbers are also compared (cosine similarity) with 48 "typical photo" points: 8 k-means centres per scene from the training photos. If the photo is far from all of them it is shown as **Not a scene photo**; if it is only a bit far, the answer gets an **Unusual photo** warning. The cut-offs are set so that only 1% (not a scene) and 5% (unusual) of held-back real scene photos are flagged.
+5. **Explain mixed photos.** If the second scene is 30% or more, the page shows **Mixed scene: A and B**. Glacier/mountain and buildings/street within 10% of each other get a **Close call** note instead.
+
+How well the scene check works (photos the model never saw):
+
+| Photos | Shown as "Not a scene photo" |
+|---|---|
+| 3,000 real scene photos (test set) | 1.2% (wrongly) |
+| 200 product photos on plain backgrounds | 100% |
+| 66 emoji images | 100% |
+| 300 everyday object photos ([Imagenette](https://github.com/fastai/imagenette): dogs, fish, radios, churches, trucks…) | 87% |
 
 ## Run it on your computer
 
@@ -138,6 +156,7 @@ This is how the model in this repo was made. It takes about 45 minutes on a lapt
 3. Turn every photo into ResNet50 features (the slow part, done once): `python training/extract_features.py data/hf V2`
 4. Train the head, test it and save the model (takes about a minute): `python training/train_head.py data/hf/features_V2.pt . --save`
 5. Convert it for the app: `python training/export_onnx.py natural_scenes_image_resnet_classifier.pt model.onnx`
+   and rebuild the scene check: `python training/build_scene_check.py data/hf/features_V2.pt scene_check.npz`
 6. Restart the app. The About page now shows the new results from `model_meta.json`.
 
 How it works: the ResNet50 backbone (ImageNet weights) is frozen, so each photo only has to go through it once. Its 2,048 features, for the photo and its mirror image, are saved, and the small head is trained on them for 40 epochs. 10% of the training photos are held back to pick the best epoch, and the 3,000 test photos are used only once, for the final score.
@@ -191,6 +210,8 @@ curl -F "image=@static/test_image_3.jpg" http://127.0.0.1:8000/api/predict
   "ok": true,
   "label": "mountain",
   "confidence": 0.9312,
+  "in_scope": true,
+  "scene_check": {"status": "ok", "similarity": 0.7074},
   "low_confidence": false,
   "description": "Peaks, ridges and rocky slopes, often with snow.",
   "top3": [{"label": "mountain", "probability": 0.9312}, {"label": "glacier", "probability": 0.0521}, {"label": "sea", "probability": 0.0074}],
@@ -199,7 +220,9 @@ curl -F "image=@static/test_image_3.jpg" http://127.0.0.1:8000/api/predict
 }
 ```
 
-(Example values.) Errors return `{"ok": false, "error": "..."}` with status 400 (bad file), 413 (over 10 MB) or 503 (model not loaded).
+`POST /api/predict-batch` takes up to 8 photos in form fields all called `images` and returns `{"ok": true, "results": [...]}` with one result (same shape as above) per photo, in order. A photo that can't be read gets `{"ok": false, "error": "..."}` without failing the others. The photo organizer uses this.
+
+(Example values.) `in_scope` is `false` when the photo is not a scene at all (`scene_check.status` is then `"not_scene"`; `label` is still the model's best guess). `scene_check.status` is `"unusual"` for photos that only partly look like the training photos. `comparison` describes a close call or a mixed scene, or is `null`. Errors return `{"ok": false, "error": "..."}` with status 400 (bad file), 413 (over 10 MB) or 503 (model not loaded).
 
 ## Sample photos
 

@@ -35,6 +35,7 @@
     var confidence = document.getElementById('confidence');
     var verdictDesc = document.getElementById('verdict-desc');
     var unsure = document.getElementById('notice-unsure');
+    var scopeNote = document.getElementById('notice-scope');
     var comparisonNote = document.getElementById('notice-comparison');
     var comparisonTitle = document.getElementById('comparison-title');
     var comparisonScores = document.getElementById('comparison-scores');
@@ -85,6 +86,8 @@
         verdictDesc.textContent = '';
         unsure.hidden = true;
         comparisonNote.hidden = true;
+        scopeNote.hidden = true;
+        result.classList.remove('is-out-of-scope');
         rows.forEach(function (row) {
             row.classList.remove('is-top');
             row.style.setProperty('--p', 0);
@@ -148,22 +151,35 @@
         document.querySelectorAll('.sample').forEach(function (b) { b.disabled = on; });
     }
 
+    var OUT_OF_SCOPE_TEXT = "It doesn't look like buildings, a forest, a glacier, a mountain, the sea or a street. " +
+        'It may be an object, a person, a drawing or a screenshot. Try a photo of one of the six scenes.';
+
     function renderResult(data) {
         result.dataset.state = 'done';
         var pct = Math.round(data.confidence * 100);
-        verdict.textContent = capitalize(data.label);
+        var outOfScope = data.in_scope === false;
+        var unusual = !outOfScope && data.scene_check && data.scene_check.status === 'unusual';
+        result.classList.toggle('is-out-of-scope', outOfScope);
         confidence.innerHTML = '';
-        var num = document.createElement('span');
-        num.className = 'num';
-        num.textContent = pct + '%';
-        confidence.appendChild(num);
-        confidence.appendChild(document.createTextNode(' confident'));
-        verdictDesc.textContent = data.description || '';
-        unsure.hidden = !(data.confidence < LOW);
+        if (outOfScope) {
+            verdict.textContent = 'Not a scene photo';
+            confidence.textContent = "Doesn't match any of the six scenes";
+            verdictDesc.textContent = OUT_OF_SCOPE_TEXT + ' (If it had to pick, the model would say ' + data.label + ', ' + pct + '%.)';
+        } else {
+            verdict.textContent = capitalize(data.label);
+            var num = document.createElement('span');
+            num.className = 'num';
+            num.textContent = pct + '%';
+            confidence.appendChild(num);
+            confidence.appendChild(document.createTextNode(' confident'));
+            verdictDesc.textContent = data.description || '';
+        }
         var comparison = data.comparison;
+        unsure.hidden = !(data.confidence < LOW) || !!comparison || outOfScope;
+        scopeNote.hidden = !unusual;
         comparisonNote.hidden = !comparison;
         if (comparison) {
-            comparisonTitle.textContent = 'Close call: ' + capitalize(comparison.first_label) + ' or ' + capitalize(comparison.second_label) + '?';
+            comparisonTitle.textContent = comparison.title || ('Close call: ' + capitalize(comparison.first_label) + ' or ' + capitalize(comparison.second_label) + '?');
             comparisonScores.textContent =
                 capitalize(comparison.first_label) + ' ' + (comparison.first_probability * 100).toFixed(1) + '% · ' +
                 capitalize(comparison.second_label) + ' ' + (comparison.second_probability * 100).toFixed(1) + '%';
@@ -188,9 +204,14 @@
         });
 
         var second = data.top3[1];
+        if (outOfScope) {
+            announce.textContent = 'Result: not a scene photo. ' + OUT_OF_SCOPE_TEXT;
+            return;
+        }
         announce.textContent = 'Result: ' + capitalize(data.label) + ', ' + pct + ' percent confident.' +
+            (unusual ? ' This photo looks unusual for the model, so treat the answer with care.' : '') +
             (second ? ' Second choice: ' + second.label + ', ' + Math.round(second.probability * 100) + ' percent.' : '') +
-            (comparison ? ' Close call between ' + comparison.first_label + ' and ' + comparison.second_label + '. ' + comparison.guidance : '') +
+            (comparison ? ' ' + (comparison.title || 'Close call') + '. ' + comparison.guidance : '') +
             (data.confidence < LOW ? ' The model is not sure about this photo.' : '');
     }
 
@@ -365,6 +386,7 @@
         var entry = {
             label: data.label,
             confidence: data.confidence,
+            outOfScope: data.in_scope === false,
             name: data.filename || (currentFile && currentFile.name) || 'photo',
             thumb: makeThumb(),
             time: Date.now()
@@ -374,7 +396,7 @@
         list = list.slice(0, HISTORY_MAX);
         if (!writeHistory(list)) {
             // Storage full: keep the newest few without pictures.
-            list = list.slice(0, 4).map(function (x) { return { label: x.label, confidence: x.confidence, name: x.name, thumb: '', time: x.time }; });
+            list = list.slice(0, 4).map(function (x) { return { label: x.label, confidence: x.confidence, outOfScope: x.outOfScope, name: x.name, thumb: '', time: x.time }; });
             writeHistory(list);
         }
         renderHistory();
@@ -397,7 +419,7 @@
             var text = document.createElement('div');
             var label = document.createElement('p');
             label.className = 'history-label';
-            label.textContent = capitalize(item.label) + ' · ' + Math.round(item.confidence * 100) + '%';
+            label.textContent = item.outOfScope ? 'Not a scene photo' : capitalize(item.label) + ' · ' + Math.round(item.confidence * 100) + '%';
             var sub = document.createElement('p');
             sub.className = 'history-sub';
             var when = new Date(item.time);
