@@ -22,6 +22,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # PyTorch is over 1 GB, which is why the app can run on Vercel.
 MODEL_PATH = os.environ.get("MODEL_PATH", os.path.join(BASE_DIR, "model.onnx"))
 META_PATH = os.environ.get("MODEL_META_PATH", os.path.join(BASE_DIR, "model_meta.json"))
+# "Is this a scene photo at all?" check (made by training/build_scene_check.py).
+SCENE_CHECK_PATH = os.environ.get("SCENE_CHECK_PATH", os.path.join(BASE_DIR, "scene_check.npz"))
 
 MAX_UPLOAD_MB = 10  # largest file the server accepts
 MAX_PICK_MB = 25  # largest photo the page accepts; it shrinks big photos before uploading
@@ -37,12 +39,22 @@ CLASS_INFO = {
     "sea": "Open water, beaches, coastlines and waves.",
     "street": "Roads and lanes seen from street level, with buildings alongside.",
 }
-COMPARISON_GAP = 0.15
+COMPARISON_GAP = 0.15  # top two this close (for a look-alike pair) = "close call"
+MIXED_MIN = 0.20  # second scene at least this likely = "mixed scene"
 SIMILAR_CLASS_GUIDANCE = {
     frozenset(("glacier", "mountain")):
         "Look for broad ice fields or icebergs (glacier) versus rocky peaks or ridges (mountain).",
     frozenset(("buildings", "street")):
         "Look for structures dominating the frame (buildings) versus a road or street scene (street).",
+}
+MIXED_GUIDANCE = {  # shown when a photo really contains two scenes (e.g. a building covered in trees)
+    frozenset(("buildings", "forest")):
+        "The photo has both built structures and a lot of greenery, such as a building covered in plants or houses in a wood.",
+    frozenset(("forest", "mountain")): "The photo shows both trees and mountain slopes.",
+    frozenset(("glacier", "sea")): "The photo shows both ice and open water, such as icebergs in the sea.",
+    frozenset(("mountain", "sea")): "The photo shows both mountains and the sea, such as a rocky coastline.",
+    frozenset(("buildings", "sea")): "The photo shows both buildings and water, such as a waterfront.",
+    frozenset(("forest", "street")): "The photo shows both a road and a lot of trees, such as a tree-lined street.",
 }
 CLASS_THUMBS = {  # one bundled sample photo that represents each class
     "buildings": "test_image_4.jpg", "forest": "test_image_12.jpg", "glacier": "test_image_10.jpg",
@@ -62,13 +74,22 @@ class UserError(Exception):
 
 
 def compare_top_classes(top3):
+    """Close call between look-alike scenes, or a photo that mixes two scenes; None otherwise."""
     if len(top3) < 2:
         return None
     first, second = top3[:2]
-    guidance = SIMILAR_CLASS_GUIDANCE.get(frozenset((first["label"], second["label"])))
-    if guidance is None or first["probability"] - second["probability"] > COMPARISON_GAP:
+    pair = frozenset((first["label"], second["label"]))
+    a, b = first["label"].capitalize(), second["label"].capitalize()
+    if pair in SIMILAR_CLASS_GUIDANCE and first["probability"] - second["probability"] <= COMPARISON_GAP:
+        kind, title, guidance = "close_call", f"Close call: {a} or {b}?", SIMILAR_CLASS_GUIDANCE[pair]
+    elif second["probability"] >= MIXED_MIN:
+        kind, title = "mixed", f"Mixed scene: {a} and {b}"
+        guidance = MIXED_GUIDANCE.get(pair, f"The photo shows signs of both {first['label']} and {second['label']}.")
+    else:
         return None
     return {
+        "kind": kind,
+        "title": title,
         "first_label": first["label"],
         "first_probability": first["probability"],
         "second_label": second["label"],
@@ -86,6 +107,31 @@ def load_meta():
     except (OSError, ValueError):
         pass
     return meta
+
+
+def load_scene_check(path):
+    """Reference points + cut-offs for the scene check. Missing file = check switched off."""
+    try:
+        data = np.load(path)
+        return {"centres": data["centres"].astype(np.float32), "unusual": float(data["unusual"]),
+                "not_scene": float(data["not_scene"])}
+    except (OSError, KeyError, ValueError):
+        return None
+
+
+def check_scene(features):
+    """How much the photo looks like the training photos: ok, unusual, or not_scene."""
+    if scene_check is None or features is None:
+        return {"status": "ok", "similarity": None}
+    f = features / (np.linalg.norm(features) + 1e-8)
+    similarity = float((scene_check["centres"] @ f).max())
+    if similarity < scene_check["not_scene"]:
+        status = "not_scene"
+    elif similarity < scene_check["unusual"]:
+        status = "unusual"
+    else:
+        status = "ok"
+    return {"status": status, "similarity": round(similarity, 4)}
 
 
 def load_model(path):
@@ -107,6 +153,8 @@ def preprocess(image):
     arr = (arr - MEAN) / STD
     return arr.transpose(2, 0, 1)[None]  # shape (1, 3, H, W)
 
+
+scene_check = load_scene_check(SCENE_CHECK_PATH)
 
 try:
     model = load_model(MODEL_PATH)
@@ -135,18 +183,23 @@ def classify(file_storage):
     except Exception:
         raise UserError("We couldn't read that file as an image. It may be damaged or not really an image.")
 
-    log_probs = model.run(None, {model.get_inputs()[0].name: preprocess(image)})[0][0]
-    probs = np.exp(log_probs)  # the model ends in LogSoftmax, so exp() gives probabilities
+    outputs = model.run(None, {model.get_inputs()[0].name: preprocess(image)})
+    probs = np.exp(outputs[0][0])  # the model ends in LogSoftmax, so exp() gives probabilities
+    features = outputs[1][0] if len(outputs) > 1 else None  # older model files have no features output
     top3 = [{"label": CLASSES[i], "probability": round(float(probs[i]), 4)} for i in np.argsort(-probs)[:3]]
     best = top3[0]
+    scene = check_scene(features)
+    in_scope = scene["status"] != "not_scene"
     return {
         "ok": True,
-        "label": best["label"],
+        "label": best["label"],  # the model's best guess, even when in_scope is false
         "confidence": best["probability"],
+        "in_scope": in_scope,
+        "scene_check": scene,
         "low_confidence": best["probability"] < LOW_CONFIDENCE,
         "description": CLASS_INFO.get(best["label"], ""),
         "top3": top3,
-        "comparison": compare_top_classes(top3),
+        "comparison": compare_top_classes(top3) if in_scope else None,
         "probabilities": [{"label": c, "probability": round(float(p), 4)} for c, p in zip(CLASSES, probs)],
         "filename": file_storage.filename,
     }
