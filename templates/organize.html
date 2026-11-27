@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Organize photos · AI Approach for Intelligent Scene Image Classification{% endblock %}
+
+{% block content %}
+<header class="intro">
+    <h1>Sort a trip's photos into folders</h1>
+    <p>Add up to {{ max_organize }} photos. The model puts each one in a scene folder, sets aside the ones that aren't scenes, and you download everything as a zip of your original photos.</p>
+</header>
+
+<noscript>
+    <div class="banner banner-error"><p>The photo organizer needs JavaScript. You can still classify one photo at a time on the <a href="{{ url_for('home') }}">Classify</a> page.</p></div>
+</noscript>
+
+{% if not model_ready %}
+<div class="banner banner-error" role="alert">
+    <p><strong>The model isn't loaded, so sorting is switched off.</strong> Check that <code>model.onnx</code> is in the project folder, then restart the app.</p>
+</div>
+{% endif %}
+
+<div class="organizer js-only" id="organizer"
+     data-api="{{ url_for('api_predict_batch') }}" data-batch="{{ max_batch }}" data-max="{{ max_organize }}"
+     data-low="{{ low_confidence }}" data-ready="{{ 'yes' if model_ready else 'no' }}">
+
+    <section class="panel org-pick" id="org-pick" aria-labelledby="org-pick-title">
+        <h2 class="panel-title" id="org-pick-title">1. Add photos</h2>
+        <div class="org-drop" id="org-drop">
+            <svg class="org-drop-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M6 14a4 4 0 0 1 4-4h9l4 4h15a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 22v11M19 27l5-5 5 5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <p class="org-drop-title">Drop a folder or photos here</p>
+            <p class="org-drop-hint">JPG, PNG, WEBP, BMP or GIF · up to {{ max_organize }} photos</p>
+            <input type="file" id="org-folder" class="org-input" webkitdirectory multiple>
+            <input type="file" id="org-files" class="org-input" accept="image/*" multiple>
+            <div class="org-pick-buttons">
+                <label class="btn btn-primary" for="org-folder">Choose folder</label>
+                <label class="btn btn-quiet" for="org-files">Choose photos</label>
+            </div>
+        </div>
+        <p class="org-privacy">Your photos stay on your device. Only a small copy of each is sent to be classified, and nothing is kept on the server. The zip is made in your browser from your original files.</p>
+    </section>
+
+    <section class="panel org-progress" id="org-progress" hidden aria-labelledby="org-progress-title">
+        <h2 class="panel-title" id="org-progress-title">2. Sorting</h2>
+        <p class="org-progress-text" id="org-progress-text" aria-live="polite">Getting ready…</p>
+        <div class="org-bar" role="progressbar" aria-labelledby="org-progress-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="org-bar">
+            <div class="org-bar-fill" id="org-bar-fill"></div>
+        </div>
+        <button type="button" class="btn btn-quiet btn-small" id="org-stop">Stop</button>
+    </section>
+
+    <section class="org-results" id="org-results" hidden aria-labelledby="org-results-title">
+        <div class="org-results-head panel">
+            <div>
+                <h2 class="org-results-title" id="org-results-title">Your sorted photos</h2>
+                <p class="org-summary" id="org-summary"></p>
+            </div>
+            <div class="org-results-actions">
+                <button type="button" class="btn btn-primary" id="org-download">
+                    <span class="spinner" aria-hidden="true"></span><span class="btn-label">Download all as zip</span>
+                </button>
+                <button type="button" class="btn btn-quiet" id="org-restart">Start again</button>
+            </div>
+        </div>
+        <div class="notice notice-unsure org-skipped" id="org-skipped" hidden></div>
+        <p class="org-tip">Wrong folder? Use <strong>Move to</strong> under a photo. The zip follows your changes.</p>
+        <div class="org-folders" id="org-folders"></div>
+        <p class="org-announce visually-hidden" id="org-announce" aria-live="polite"></p>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
+<script src="{{ url_for('static', filename='js/organize.js') }}" defer></script>
+{% endblock %}

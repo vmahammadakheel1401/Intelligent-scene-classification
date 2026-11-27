@@ -16,6 +16,7 @@ A web app that looks at a photo and says which of six scene types it shows (**bu
 - **Results without reloading the page**: the predicted scene, the confidence, and a bar for **all six scenes** with the top 3 ranked.
 - **Close-call guidance** for glacier/mountain and buildings/street when the top two scores differ by no more than 15 percentage points.
 - **Honest uncertainty**: a "Not sure" warning when no scene reaches 50%.
+- **Photo organizer** (`/organize`): add a whole folder of up to 200 trip photos and get them sorted into Mountain, Sea, Forest, Glacier, Buildings, Street, **Check these** (mixed or unsure) and **Not a scene** folders. Move any photo to another folder, then download everything as a zip of your **original** photos with a `report.csv`. Photos are shrunk in the browser before sending, so 100 photos is only about 5 MB of upload, and nothing is stored on the server.
 - **"Not a scene photo" detection**: photos that are none of the six scenes (a trash can, a person, an emoji) are rejected instead of being forced into one, and unusual photos get a warning.
 - **Mixed scenes**: when two scenes are both likely (for example a building covered in trees), the page says so, and look-alike pairs (glacier/mountain, buildings/street) get a "close call" tip.
 - **11 sample photos** you can click to test the model, captioned with what each photo really shows.
@@ -33,11 +34,13 @@ app.py                          Flask app: routes, validation, model loading, pr
 templates/
   base.html                     Shared layout (header, theme toggle, footer)
   index.html                    Classify page
+  organize.html                 Photo organizer page
   about.html                    About the model page
   error.html                    Friendly 404 / 500 page
 static/
   css/style.css                 All styles (light and dark themes)
   js/app.js                     Upload, preview, validation, results, samples, history
+  js/organize.js                Photo organizer: folder reading, batching, folders, zip download
   js/theme.js                   Light/dark toggle
   thumbs/                       Small versions of the sample photos
   test_image_*.jpg              sample photos (11 shown in the app)
@@ -216,6 +219,8 @@ curl -F "image=@static/test_image_3.jpg" http://127.0.0.1:8000/api/predict
   "filename": "test_image_3.jpg"
 }
 ```
+
+`POST /api/predict-batch` takes up to 8 photos in form fields all called `images` and returns `{"ok": true, "results": [...]}` with one result (same shape as above) per photo, in order. A photo that can't be read gets `{"ok": false, "error": "..."}` without failing the others. The photo organizer uses this.
 
 (Example values.) `in_scope` is `false` when the photo is not a scene at all (`scene_check.status` is then `"not_scene"`; `label` is still the model's best guess). `scene_check.status` is `"unusual"` for photos that only partly look like the training photos. `comparison` describes a close call or a mixed scene, or is `null`. Errors return `{"ok": false, "error": "..."}` with status 400 (bad file), 413 (over 10 MB) or 503 (model not loaded).
 

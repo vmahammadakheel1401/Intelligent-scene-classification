@@ -4,6 +4,8 @@ Routes
   GET  /             upload page
   POST /predict      classic form upload (works without JavaScript)
   POST /api/predict  JSON API used by the page's JavaScript
+  POST /api/predict-batch  up to 8 photos per request (used by the photo organizer)
+  GET  /organize     photo organizer: sort a folder of photos into scene folders
   GET  /about        model details and results
 """
 import json
@@ -29,6 +31,8 @@ MAX_UPLOAD_MB = 10  # largest file the server accepts
 MAX_PICK_MB = 25  # largest photo the page accepts; it shrinks big photos before uploading
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "bmp", "gif"}
 LOW_CONFIDENCE = 0.50  # below this, the page says "not sure"
+MAX_BATCH = 8  # photos per /api/predict-batch request (the organizer shrinks them first)
+MAX_ORGANIZE = 200  # photos per organizer run
 
 CLASSES = ["buildings", "forest", "glacier", "mountain", "sea", "street"]
 CLASS_INFO = {
@@ -241,6 +245,30 @@ def api_predict():
         return jsonify(ok=False, error=str(err)), 400
     except RuntimeError as err:
         return jsonify(ok=False, error=str(err)), 503
+
+
+@app.route("/api/predict-batch", methods=["POST"])
+def api_predict_batch():
+    """Classifies several photos at once. One bad photo does not fail the others."""
+    if model is None:
+        return jsonify(ok=False, error="The model is not available on the server right now."), 503
+    files = request.files.getlist("images")
+    if not files:
+        return jsonify(ok=False, error="Please send at least one photo."), 400
+    if len(files) > MAX_BATCH:
+        return jsonify(ok=False, error=f"Please send at most {MAX_BATCH} photos per request."), 400
+    results = []
+    for f in files:
+        try:
+            results.append(classify(f))
+        except UserError as err:
+            results.append({"ok": False, "error": str(err), "filename": f.filename})
+    return jsonify(ok=True, results=results)
+
+
+@app.route("/organize")
+def organize():
+    return render_template("organize.html", **page_context(max_batch=MAX_BATCH, max_organize=MAX_ORGANIZE))
 
 
 @app.route("/about")
